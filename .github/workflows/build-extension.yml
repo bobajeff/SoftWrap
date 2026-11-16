@@ -134,7 +134,7 @@ jobs:
       - name: Download Blender CLI
         run: |
           BLENDER_ARCHIVE="blender-${{ env.BLENDER_VERSION }}-linux-x64.tar.xz"
-          curl -L "https://blender.org{BLENDER_ARCHIVE}" -o "${BLENDER_ARCHIVE}"
+          curl -L "https://blender.org${BLENDER_ARCHIVE}" -o "${BLENDER_ARCHIVE}"
           tar -xf "${BLENDER_ARCHIVE}"
           mv "blender-${{ env.BLENDER_VERSION }}-linux-x64" blender
 
