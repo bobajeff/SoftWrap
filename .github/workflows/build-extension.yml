@@ -7,63 +7,92 @@ on:
   pull_request:
 
 env:
-  # Match Python to your target Blender release (3.13 for Blender 5.x)
+  # Blender 5.1.2 uses Python 3.13
   PYTHON_VERSION: "3.13"
   BLENDER_VERSION: "5.1.2"
 
 jobs:
-  build-wheels:
-    name: Build Wheel (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-22.04, windows-latest, macos-15]
-
+  build-linux:
+    name: Build Wheel (ubuntu-22.04)
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Build manylinux wheel on Linux
-        if: runner.os == 'Linux'
         uses: pypa/cibuildwheel@v2.22.0
         env:
-          # Build only CPython 3.13 x86_64 
           CIBW_BUILD: "cp313-manylinux_x86_64"
           CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
         with:
           package-dir: ./softwrap_core
           output-dir: dist_wheels
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }} (Windows/macOS)
-        if: runner.os != 'Linux'
+      - name: Upload Linux wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux
+          path: dist_wheels/*.whl
+
+  build-windows:
+    name: Build Wheel (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install build dependencies (Windows/macOS)
-        if: runner.os != 'Linux'
+      - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
           pip install cython setuptools wheel
 
-      - name: Build Cython wheel (Windows/macOS)
-        if: runner.os != 'Linux'
+      - name: Build Cython wheel
+        run: |
+          pip wheel ./softwrap_core --no-deps -w dist_wheels/
+
+      - name: Upload Windows wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-windows
+          path: dist_wheels/*.whl
+
+  build-macos:
+    name: Build Wheel (macos-15)
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install cython setuptools wheel
+
+      - name: Build Cython wheel
         env:
-          # Ensures macOS wheel tags as macosx_11_0_arm64 for backward compatibility
           MACOSX_DEPLOYMENT_TARGET: "11.0"
         run: |
           pip wheel ./softwrap_core --no-deps -w dist_wheels/
 
-      - name: Upload platform wheel
+      - name: Upload macOS wheel
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-${{ matrix.os }}
+          name: wheel-macos
           path: dist_wheels/*.whl
 
   package-extension:
     name: Package Blender Extension
-    needs: [build-wheels]
+    needs: [build-linux, build-windows, build-macos]
     if: ${{ !cancelled() && needs.build-linux.result == 'success' && needs.build-windows.result == 'success' }}
     runs-on: ubuntu-22.04
 
@@ -71,9 +100,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify upstream matrix status
+      - name: Log upstream status
         run: |
-          echo "build-wheels status: ${{ needs.build-wheels.result }}"
+          echo "Linux: ${{ needs.build-linux.result }}"
+          echo "Windows: ${{ needs.build-windows.result }}"
+          echo "macOS (optional): ${{ needs.build-macos.result }}"
 
       - name: Install Blender runtime dependencies
         run: |
@@ -81,12 +112,24 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libx11-6 libxi6 libxrender1 libxkbcommon0 libgl1 libsm6 libice6
 
-      - name: Download all compiled wheels
+      - name: Download compiled wheels
         uses: actions/download-artifact@v4
         with:
           pattern: wheel-*
-          path: ./extension_src/wheels
+          path: ./extension/wheels
           merge-multiple: true
+
+      - name: Dynamically filter blender_manifest.toml if macOS failed
+        if: needs.build-macos.result != 'success'
+        run: |
+          python3 -c '
+          with open("./extension/blender_manifest.toml", "r") as f:
+              lines = f.readlines()
+          with open("./extension/blender_manifest.toml", "w") as f:
+              for line in lines:
+                  if "macosx" not in line and "macos-arm64" not in line:
+                      f.write(line)
+          '
 
       - name: Download Blender CLI
         run: |

@@ -10,7 +10,11 @@ tags = ["Mesh"]
 blender_version_min = "5.1.2"
 license = ["SPDX:GPL-3.0-or-later"]
 
-platforms = ["windows-x64", "macos-arm64", "linux-x64"]
+platforms = [
+"windows-x64", 
+"macos-arm64", 
+"linux-x64"
+]
 
 wheels = [
   "./wheels/softwrap_core-2.1.3-cp313-cp313-win_amd64.whl",
