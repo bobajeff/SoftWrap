@@ -12,15 +12,20 @@ env:
   BLENDER_VERSION: "5.1.2"
 
 jobs:
-  build-linux-wheel:
-    name: Build Linux Wheel (Ubuntu 22.04)
-    runs-on: ubuntu-22.04
+  build-wheels:
+    name: Build Wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-15]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build manylinux wheel via cibuildwheel
+      - name: Build manylinux wheel on Linux
+        if: runner.os == 'Linux'
         uses: pypa/cibuildwheel@v2.22.0
         env:
           # Build only CPython 3.13 x86_64 
@@ -30,35 +35,20 @@ jobs:
           package-dir: ./softwrap_core
           output-dir: dist_wheels
 
-      - name: Upload Linux wheel
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheel-linux
-          path: dist_wheels/*.whl
-
-  build-other-wheels:
-    name: Build Wheel (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-15]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
+      - name: Set up Python ${{ env.PYTHON_VERSION }} (Windows/macOS)
+        if: runner.os != 'Linux'
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install build dependencies
+      - name: Install build dependencies (Windows/macOS)
+        if: runner.os != 'Linux'
         run: |
           python -m pip install --upgrade pip
           pip install cython setuptools wheel
 
-      - name: Build Cython wheel
+      - name: Build Cython wheel (Windows/macOS)
+        if: runner.os != 'Linux'
         env:
           # Ensures macOS wheel tags as macosx_11_0_arm64 for backward compatibility
           MACOSX_DEPLOYMENT_TARGET: "11.0"
@@ -73,12 +63,17 @@ jobs:
 
   package-extension:
     name: Package Blender Extension
-    needs: [build-linux-wheel, build-other-wheels]
+    needs: [build-wheels]
+    if: ${{ !cancelled() && needs.build-linux.result == 'success' && needs.build-windows.result == 'success' }}
     runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Verify upstream matrix status
+        run: |
+          echo "build-wheels status: ${{ needs.build-wheels.result }}"
 
       - name: Install Blender runtime dependencies
         run: |
@@ -90,7 +85,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: wheel-*
-          path: ./extension/wheels
+          path: ./extension_src/wheels
           merge-multiple: true
 
       - name: Download Blender CLI
