@@ -112,6 +112,11 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libx11-6 libxi6 libxrender1 libxkbcommon0 libgl1 libsm6 libice6
 
+      - name: Set up Blender ${{ env.BLENDER_VERSION }}
+        uses: bradyajohnston/setup-blender@v5
+        with:
+          version: ${{ env.BLENDER_VERSION }}
+
       - name: Download compiled wheels
         uses: actions/download-artifact@v4
         with:
@@ -131,17 +136,10 @@ jobs:
                       f.write(line)
           '
 
-      - name: Download Blender CLI
-        run: |
-          BLENDER_ARCHIVE="blender-${{ env.BLENDER_VERSION }}-linux-x64.tar.xz"
-          curl -L "https://blender.org${BLENDER_ARCHIVE}" -o "${BLENDER_ARCHIVE}"
-          tar -xf "${BLENDER_ARCHIVE}"
-          mv "blender-${{ env.BLENDER_VERSION }}-linux-x64" blender
-
       - name: Build split-platform extensions
         run: |
           mkdir -p release_zips
-          ./blender/blender --command extension build \
+          blender --command extension build \
             --source-dir ./extension \
             --output-dir ./release_zips \
             --split-platforms
