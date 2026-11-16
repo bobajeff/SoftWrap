@@ -38,59 +38,9 @@ else: # mac
     extra_link_args = ['-g3'] if debug else []
 
 
-
-def line_directive_add(filestr):
-    modfied_tag = '/* Postprocessed to add #line directives */'
-    if filestr.startswith(modfied_tag):
-        return filestr
-
-    lines = filestr.split('\n')
-    line_comment_re = re.compile(r"^\s*\/\*\s*\"(.+)\":(\d+)")
-    define_re = re.compile(r'\s*#\s*define')
-
-    curr_line = None
-    curr_file = None
-    in_comment = False
-    in_define = False
-
-    new_lines = [modfied_tag]
-    for line in lines:
-        if "/*" in line:
-            in_comment = True
-            curr_file = None
-            curr_line = None
-
-        match = line_comment_re.match(line)
-        if match:
-            filename = match.group(1)
-            line_num = match.group(2)
-            if path.isfile(filename):
-                # curr_file = path.abspath(filename)
-                curr_file = filename
-                curr_line = line_num
-
-        if define_re.match(line):
-            in_define = True
-
-        if not in_comment and not in_define and line.strip():
-            if curr_file:
-                new_lines.append(f'\n# line {curr_line} "{curr_file}"')
-
-        if '*/' in line:
-            in_comment = False
-
-        if not line.endswith('\\'):
-            in_define = False
-
-        new_lines.append(line)
-
-    return '\n'.join(new_lines) + '\n'
-
-
 modules = cythonize(
     Extension(
-        'softwrap_core2',
-        # ['core/core.pyx'],
+        'softwrap_core',
         ['core/core2.pyx'],
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,
@@ -98,14 +48,7 @@ modules = cythonize(
     )
 )
 
-print('adding #line directives')
-with open('core/core2.cpp', 'r+') as f:
-    new_filestr = line_directive_add(f.read())
-    f.seek(0)
-    f.truncate()
-    f.write(new_filestr)
-
 setup(
-    name='softwrap_core2',
+    name='softwrap_core',
     ext_modules=modules
 )

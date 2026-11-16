@@ -1,0 +1,19 @@
+schema_version = "2.1.3"
+id = "softwrap_updated"
+version = "2.1.3"
+name = "Softwrap"
+tagline = "Transfer topology to another model using softbody simulation"
+maintainer = "Jeffrey"
+website = "https://github.com/bobajeff/SoftWrap"
+type = "add-on"
+tags = ["Mesh"]
+blender_version_min = "5.1.2"
+license = ["SPDX:GPL-3.0-or-later"]
+
+platforms = ["windows-x64", "macos-arm64", "linux-x64"]
+
+wheels = [
+  "./wheels/softwrap_core-2.1.3-cp313-cp313-win_amd64.whl",
+  "./wheels/softwrap_core-2.1.3-cp313-cp313-macosx_11_0_arm64.whl",
+  "./wheels/softwrap_core-2.1.3-cp313-cp313-manylinux_2_28_x86_64.whl",
+]

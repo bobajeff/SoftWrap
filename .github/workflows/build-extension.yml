@@ -1,0 +1,112 @@
+name: Build Cython Blender Extension
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+
+env:
+  # Match Python to your target Blender release (3.13 for Blender 5.x)
+  PYTHON_VERSION: "3.13"
+  BLENDER_VERSION: "5.1.2"
+
+jobs:
+  build-linux-wheel:
+    name: Build Linux Wheel (Ubuntu 22.04)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build manylinux wheel via cibuildwheel
+        uses: pypa/cibuildwheel@v2.22.0
+        env:
+          # Build only CPython 3.13 x86_64 
+          CIBW_BUILD: "cp313-manylinux_x86_64"
+          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
+        with:
+          package-dir: ./softwrap_core
+          output-dir: dist_wheels
+
+      - name: Upload Linux wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux
+          path: dist_wheels/*.whl
+
+  build-other-wheels:
+    name: Build Wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install cython setuptools wheel
+
+      - name: Build Cython wheel
+        run: |
+          pip wheel ./softwrap_core --no-deps -w dist_wheels/
+
+      - name: Upload platform wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}
+          path: dist_wheels/*.whl
+
+  package-extension:
+    name: Package Blender Extension
+    needs: [build-linux-wheel, build-other-wheels]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Blender runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libx11-6 libxi6 libxrender1 libxkbcommon0 libgl1 libsm6 libice6
+
+      - name: Download all compiled wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: ./extension/wheels
+          merge-multiple: true
+
+      - name: Download Blender CLI
+        run: |
+          BLENDER_ARCHIVE="blender-${{ env.BLENDER_VERSION }}-linux-x64.tar.xz"
+          curl -L "https://blender.org{BLENDER_ARCHIVE}" -o "${BLENDER_ARCHIVE}"
+          tar -xf "${BLENDER_ARCHIVE}"
+          mv "blender-${{ env.BLENDER_VERSION }}-linux-x64" blender
+
+      - name: Build split-platform extensions
+        run: |
+          mkdir -p release_zips
+          ./blender/blender --command extension build \
+            --source-dir ./extension \
+            --output-dir ./release_zips \
+            --split-platforms
+
+      - name: Upload final extension archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-extension-zips
+          path: release_zips/*.zip

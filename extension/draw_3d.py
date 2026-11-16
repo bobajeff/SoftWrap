@@ -23,7 +23,6 @@ This class works directly like a callable draw handler and keeps track of all th
 __all__ = ["DrawCallback"]
 
 import bpy
-import bgl
 import gpu
 from gpu_extras.batch import batch_for_shader
 from mathutils import Matrix, Vector
@@ -36,9 +35,6 @@ uniform mat4 ModelViewProjectionMatrix;
 #ifdef USE_WORLD_CLIP_PLANES
 uniform mat4 ModelMatrix;
 #endif
-
-in vec3 pos;
-in vec4 color;
 
 out vec4 finalColor;
 
@@ -63,7 +59,6 @@ out vec4 fragColor;
 void main()
 {
   fragColor = finalColor;
-  fragColor = blender_srgb_to_framebuffer_space(fragColor);
 }
 """
 
@@ -81,7 +76,6 @@ void main()
         discard;
     }
     fragColor = finalColor;
-    fragColor = blender_srgb_to_framebuffer_space(fragColor);
 }
 
 """
@@ -105,14 +99,29 @@ class DrawCallback:
         # Handler Placeholder
         self.draw_handler = None
 
+
+
         self.line_coords = []
         self.line_colors = []
         self.point_coords = []
         self.point_colors = []
-        self._line_shader = gpu.types.GPUShader(vertex_shader, fragment_shader)
-        self._point_shader = gpu.types.GPUShader(vertex_shader, point_fragment_shader)
+
+        shader_info = gpu.types.GPUShaderCreateInfo()
+        shader_info.vertex_in(0, 'VEC3', "pos")
+        shader_info.vertex_in(1, 'VEC4', "color")
+        shader_info.vertex_source(vertex_shader)
+        shader_info.fragment_source(fragment_shader)
+        self._line_shader = gpu.shader.create_from_info(shader_info)
+        shader_info2 = gpu.types.GPUShaderCreateInfo()
+        shader_info2.vertex_in(0, 'VEC3', "pos")
+        shader_info2.vertex_in(1, 'VEC4', "color")
+        shader_info2.vertex_source(vertex_shader)
+        shader_info2.fragment_source(point_fragment_shader)
+        self._point_shader = gpu.shader.create_from_info(shader_info2)
         self._line_batch = batch_for_shader(self._line_shader, 'LINES',
                                             {"pos": self.line_coords, "color": self.line_colors})
+        del shader_info
+        del shader_info2
         self._point_batch = batch_for_shader(self._line_shader, 'POINTS',
                                              {"pos": self.point_coords, "color": self.line_colors})
 
@@ -185,28 +194,12 @@ class DrawCallback:
             gpu.state.line_width_set(self.line_width)
             gpu.state.point_size_set(self.point_size)
 
-        else:
-            bgl.glEnable(bgl.GL_BLEND)
-
-            if self.draw_on_top:
-                bgl.glDisable(bgl.GL_DEPTH_TEST)
-
-            bgl.glLineWidth(self.line_width)
-            bgl.glPointSize(self.point_size)
-
     def _stop_drawing(self):
 
         # just reset some OpenGL stuff to not interfere with other drawings in the viewport
         # its not absolutely necessary but makes it safer.
         if VERSION[1] >= 93:
             pass
-
-        else:
-            bgl.glDisable(bgl.GL_BLEND)
-            bgl.glLineWidth(1)
-            bgl.glPointSize(1)
-            if self.draw_on_top:
-                bgl.glEnable(bgl.GL_DEPTH_TEST)
 
     def _draw(self):
         # This should be called by __call__,

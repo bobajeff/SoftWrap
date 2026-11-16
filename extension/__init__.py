@@ -17,7 +17,7 @@ import gc
 import random
 import time
 from math import atan2, ceil
-from . import softwrap_core2 as core
+import softwrap_core as core
 from . draw_3d import DrawCallback
 from bpy_extras.view3d_utils import region_2d_to_origin_3d, region_2d_to_vector_3d, location_3d_to_region_2d
 from mathutils.geometry import intersect_line_plane
@@ -26,15 +26,7 @@ from collections import namedtuple, defaultdict
 import bpy.app.handlers as handlers
 
 
-bl_info = {'name': 'Softwrap 2',
-           'description': 'Transfer topology from one model to another using a softbody simulation',
-           'author': 'Jean Da Costa Machado',
-           'version': ('2.1.2-alpha-for-blender3.1 -- a928357391',), # ship:-v
-           'blender': (3, 1, 0),
-           'doc_url': 'https://jeacom25b.github.io/Softwrap-Manual/',
-           'tracker_url': 'https://jeacom25b.github.io/Softwrap-Manual/',
-           'category': 'Mesh',
-           'location': '3D view > properties (N-panel) > Softwrap 2'}
+
 
 all_classes = []
 
