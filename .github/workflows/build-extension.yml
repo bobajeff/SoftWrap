@@ -157,7 +157,7 @@ jobs:
           MACOS_STATUS: ${{ needs.build-macos.result }}
         run: |
           cat << 'EOF' > body.md
-          ## Blender Extension Release (${{ github.ref_name }})
+          ## Softwrap Release (${{ github.ref_name }})
 
           Built and packaged with **Blender \(${{ env.BLENDER_VERSION }}** (Python\)${{ env.PYTHON_VERSION }}).
 
