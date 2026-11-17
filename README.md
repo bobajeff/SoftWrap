@@ -30,3 +30,20 @@ blender --command extension build
 see orginal [Softwrap Manual](https://jeacom25b.github.io/Softwrap-Manual/)
 
 see also [Softwrap product page on Superhive](https://superhivemarket.com/products/softwrap)
+
+## Videos
+#### [Softwrap - Getting started - YouTube](https://www.youtube.com/watch?v=8P_2RnGh46Y)
+
+[![Softwrap - Getting started - YouTube](http://img.youtube.com/vi/8P_2RnGh46Y/mqdefault.jpg)](https://www.youtube.com/watch?v=8P_2RnGh46Y)
+
+#### [Softwrap basic retopo. - YouTube](https://www.youtube.com/watch?v=aEH9J-YlwwQ)
+
+[![Softwrap basic retopo. - YouTube](http://img.youtube.com/vi/aEH9J-YlwwQ/mqdefault.jpg)](https://www.youtube.com/watch?v=aEH9J-YlwwQ)
+
+#### [SoftWrap - Fixing shapes on the fly tutorial - YouTube](https://www.youtube.com/watch?v=hRosGbzryQk)
+
+[![SoftWrap - Fixing shapes on the fly tutorial - YouTube](http://img.youtube.com/vi/hRosGbzryQk/mqdefault.jpg)](https://www.youtube.com/watch?v=hRosGbzryQk)
+
+#### [softwrap retopo hand - YouTube](https://www.youtube.com/watch?v=lRf6Z6PCv4E)
+
+[![softwrap retopo hand - YouTube](http://img.youtube.com/vi/lRf6Z6PCv4E/mqdefault.jpg)](https://www.youtube.com/watch?v=lRf6Z6PCv4E)
