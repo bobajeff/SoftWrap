@@ -159,7 +159,7 @@ jobs:
           cat << 'EOF' > body.md
           ## Blender Extension Release (${{ github.ref_name }})
 
-          Built and packaged with **Blender \({{ env.BLENDER_VERSION }}** (Python\){{ env.PYTHON_VERSION }}).
+          Built and packaged with **Blender \(${{ env.BLENDER_VERSION }}** (Python\)${{ env.PYTHON_VERSION }}).
 
           ### Included Platform Builds
           * **Linux (`linux-x64`):** `${LINUX_STATUS}` (manylinux_2_28)
