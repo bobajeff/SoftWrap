@@ -6,6 +6,9 @@ on:
     tags: [ 'v*' ]
   pull_request:
 
+permissions:
+  contents: write
+
 env:
   # Blender 5.1.2 uses Python 3.13
   PYTHON_VERSION: "3.13"
@@ -99,12 +102,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Log upstream status
-        run: |
-          echo "Linux: ${{ needs.build-linux.result }}"
-          echo "Windows: ${{ needs.build-windows.result }}"
-          echo "macOS (optional): ${{ needs.build-macos.result }}"
+        with:
+          fetch-depth: 0
 
       - name: Install Blender runtime dependencies
         run: |
@@ -149,3 +148,42 @@ jobs:
         with:
           name: blender-extension-zips
           path: release_zips/*.zip
+
+      - name: Generate release body.md
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          LINUX_STATUS: ${{ needs.build-linux.result }}
+          WINDOWS_STATUS: ${{ needs.build-windows.result }}
+          MACOS_STATUS: ${{ needs.build-macos.result }}
+        run: |
+          cat << 'EOF' > body.md
+          ## Blender Extension Release (${{ github.ref_name }})
+
+          Built and packaged with **Blender \({{ env.BLENDER_VERSION }}** (Python\){{ env.PYTHON_VERSION }}).
+
+          ### Included Platform Builds
+          * **Linux (`linux-x64`):** `${LINUX_STATUS}` (manylinux_2_28)
+          * **Windows (`windows-x64`):** `${WINDOWS_STATUS}`
+          * **macOS (`macos-arm64`):** `${MACOS_STATUS}`
+
+          ### Installation
+          1. Download the `.zip` archive matching your operating system below.
+          2. Open Blender **${{ env.BLENDER_VERSION }}+** and go to **Edit > Preferences > Get Extensions**.
+          3. Click the top-right dropdown menu and select **Install from Disk...**, then choose the downloaded `.zip` file.
+
+          ### SHA-256 Checksums
+          ```text
+          EOF
+
+          # Expand status variables and append actual file hashes
+          envsubst < body.md > body.tmp && mv body.tmp body.md
+          (cd release_zips && sha256sum *.zip) >> body.md
+          echo '```' >> body.md
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: body.md
+          generate_release_notes: true
+          files: release_zips/*.zip
