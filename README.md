@@ -9,7 +9,7 @@
 Transfer topology from one model to another using a softbody simulation
 
 ## Install
-1. Download the zip for your platform
+1. Download the [zip for your platform](https://github.com/bobajeff/SoftWrap/releases/latest)
 2. Open Blender and go to **Edit > Preferences**.
 3. Select the **Get Extensions** section in the left sidebar.
 4. Click the **downward arrow** (`v`) in the top-right corner of the Preferences window.
