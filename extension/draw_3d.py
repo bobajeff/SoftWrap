@@ -10,9 +10,9 @@
 #     GNU General Public License for more details.
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+# Modified 2026-11-20 by bobajeff: Updated draw code to work with Blender 5.1.2
 '''
-This is a utility module for drawing lines in the 3D viewport on Blender 2.8
+This is a utility module for drawing lines in the 3D viewport on Blender 5.1.2
 using the GPU Api
 
 
@@ -26,108 +26,80 @@ import bpy
 import gpu
 from gpu_extras.batch import batch_for_shader
 from mathutils import Matrix, Vector
-VERSION = bpy.app.version
 
 vertex_shader = '''
-
-uniform mat4 ModelViewProjectionMatrix;
-
-#ifdef USE_WORLD_CLIP_PLANES
-uniform mat4 ModelMatrix;
-#endif
-
-out vec4 finalColor;
-
-void main()
-{
+void main() {
     gl_Position = ModelViewProjectionMatrix * vec4(pos, 1.0);
     gl_Position.z -= 0.002;
     finalColor = color;
-
-    #ifdef USE_WORLD_CLIP_PLANES
-      world_clip_planes_calc_clip_distance((ModelMatrix * vec4(pos, 1.0)).xyz);
-    #endif
 }
-
 '''
 
-
-fragment_shader = """
-in vec4 finalColor;
-out vec4 fragColor;
-
-void main()
-{
-  fragColor = finalColor;
+fragment_shader = '''
+void main() {
+    fragColor = finalColor;
 }
-"""
+'''
 
-point_fragment_shader = """
-in vec4 finalColor;
-in vec4 fragCoord;
-
-out vec4 fragColor;
-
-void main()
-{
+point_fragment_shader = '''
+void main() {
     vec2 coord = (gl_PointCoord - vec2(0.5, 0.5)) * 2.0;
     float fac = dot(coord, coord);
-    if (fac > 0.5){
+    if (fac > 0.5) {
         discard;
     }
     fragColor = finalColor;
 }
+'''
 
-"""
+
+def _create_shader(frag_source):
+    vert_out = gpu.types.GPUStageInterfaceInfo("my_interface")
+    vert_out.smooth('VEC4', "finalColor")
+
+    shader_info = gpu.types.GPUShaderCreateInfo()
+    shader_info.push_constant('MAT4', "ModelViewProjectionMatrix")
+    shader_info.vertex_in(0, 'VEC3', "pos")
+    shader_info.vertex_in(1, 'VEC4', "color")
+    shader_info.vertex_out(vert_out)
+    shader_info.fragment_out(0, 'VEC4', "fragColor")
+
+    shader_info.vertex_source(vertex_shader)
+    shader_info.fragment_source(frag_source)
+
+    return gpu.shader.create_from_info(shader_info)
 
 
 class DrawCallback:
     running_draws = set()
 
     def __init__(self):
-
-        # Useful for rendering in the same space of an object
-        self.matrix = Matrix().Identity(4)
-        # X-ray mode, draw through solid objects
+        self.matrix = Matrix.Identity(4)
         self.draw_on_top = False
-        # Blend mode to choose, set it to one of the blend constants.
-        self.blend_mode = 'MULTIPLY'
+        # Options: 'NONE', 'ALPHA', 'ALPHA_PREMULT', 'ADDITIVE', 'ADDITIVE_PREMULT', 'MULTIPLY', 'SUBTRACT', 'INVERT'
+        self.blend_mode = 'ALPHA'
 
-        self.line_width = 1
-        self.point_size = 3
+        self.line_width = 1.0
+        self.point_size = 3.0
 
-        # Handler Placeholder
         self.draw_handler = None
-
-
 
         self.line_coords = []
         self.line_colors = []
         self.point_coords = []
         self.point_colors = []
 
-        shader_info = gpu.types.GPUShaderCreateInfo()
-        shader_info.vertex_in(0, 'VEC3', "pos")
-        shader_info.vertex_in(1, 'VEC4', "color")
-        shader_info.vertex_source(vertex_shader)
-        shader_info.fragment_source(fragment_shader)
-        self._line_shader = gpu.shader.create_from_info(shader_info)
-        shader_info2 = gpu.types.GPUShaderCreateInfo()
-        shader_info2.vertex_in(0, 'VEC3', "pos")
-        shader_info2.vertex_in(1, 'VEC4', "color")
-        shader_info2.vertex_source(vertex_shader)
-        shader_info2.fragment_source(point_fragment_shader)
-        self._point_shader = gpu.shader.create_from_info(shader_info2)
-        self._line_batch = batch_for_shader(self._line_shader, 'LINES',
-                                            {"pos": self.line_coords, "color": self.line_colors})
-        del shader_info
-        del shader_info2
-        self._point_batch = batch_for_shader(self._line_shader, 'POINTS',
-                                             {"pos": self.point_coords, "color": self.line_colors})
+        self._line_shader = _create_shader(fragment_shader)
+        self._point_shader = _create_shader(point_fragment_shader)
+
+        self._line_batch = batch_for_shader(
+            self._line_shader, 'LINES', {"pos": self.line_coords, "color": self.line_colors}
+        )
+        self._point_batch = batch_for_shader(
+            self._point_shader, 'POINTS', {"pos": self.point_coords, "color": self.point_colors}
+        )
 
     def __call__(self, *args, **kwargs):
-        # __call__ Makes this object behave like a function.
-        # So you can add it like a draw handler.
         self._draw()
 
     def setup_handler(self):
@@ -153,80 +125,74 @@ class DrawCallback:
         # Call it every time you clear the data or add new lines, otherwize,
         # You wont see changes in the viewport
         coords = [self.matrix @ Vector(coord) for coord in self.line_coords]
-        self._line_batch = batch_for_shader(self._line_shader, 'LINES', {"pos": coords, "color": self.line_colors})
+        self._line_batch = batch_for_shader(
+            self._line_shader, 'LINES', {"pos": coords, "color": self.line_colors}
+        )
         coords = [self.matrix @ Vector(coord) for coord in self.point_coords]
-        self._point_batch = batch_for_shader(self._point_shader, 'POINTS', {"pos": coords, "color": self.point_colors})
+        self._point_batch = batch_for_shader(
+            self._point_shader, 'POINTS', {"pos": coords, "color": self.point_colors}
+        )
 
     def add_line(self, start, end, color1=(1, 0, 0, 1), color2=None):
-        # Simple add_line function, support color gradients,
-        # if only color1 is specified, it will be solid color (color1 on both ends)
-        # This doesnt render a line, it just adds the vectors and colors to the data
-        # so after calling update_batch(), it will be converted in a buffer Object
         self.line_coords.append(Vector(start))
         self.line_coords.append(Vector(end))
         self.line_colors.append(color1)
-        if color2 is None:
-            self.line_colors.append(color1)
-        else:
-            self.line_colors.append(color2)
+        self.line_colors.append(color1 if color2 is None else color2)
 
     def add_point(self, location, color=(1, 0, 0, 1)):
-        self.point_coords.append(location)
+        self.point_coords.append(Vector(location))
         self.point_colors.append(color)
 
     def clear_data(self):
         # just clear all the data
-        self.line_coords = []
-        self.line_colors = []
-        self.point_coords = []
-        self.point_colors = []
+        self.line_coords.clear()
+        self.line_colors.clear()
+        self.point_coords.clear()
+        self.point_colors.clear()
 
     def _start_drawing(self):
         # This handles all the settings of the renderer before starting the draw stuff
-        if VERSION[1] >= 93:
-            gpu.state.blend_set('ALPHA')
+        gpu.state.blend_set(self.blend_mode)
+        if self.draw_on_top:
+            gpu.state.depth_test_set('NONE')
+        else:
+            gpu.state.depth_test_set('LESS_EQUAL')
 
-            # bgl.glDisable(bgl.GL_DEPTH_TEST)
-            # if self.draw_on_top:
-            if self.draw_on_top:
-                gpu.state.depth_test_set('NONE')
-
-            gpu.state.line_width_set(self.line_width)
-            gpu.state.point_size_set(self.point_size)
+        gpu.state.line_width_set(self.line_width)
+        gpu.state.point_size_set(self.point_size)
 
     def _stop_drawing(self):
-
-        # just reset some OpenGL stuff to not interfere with other drawings in the viewport
-        # its not absolutely necessary but makes it safer.
-        if VERSION[1] >= 93:
-            pass
+        gpu.state.blend_set('NONE')
+        gpu.state.depth_test_set('NONE')
+        gpu.state.line_width_set(1.0)
+        gpu.state.point_size_set(1.0)
 
     def _draw(self):
-        # This should be called by __call__,
-        # just regular routines for rendering in the viewport as a draw_handler
         self._start_drawing()
-        self._line_shader.bind()
-        self._line_batch.draw(self._line_shader)
-        self._point_shader.bind()
-        self._point_batch.draw(self._point_shader)
+        
+        if self.line_coords:
+            self._line_shader.bind()
+            self._line_batch.draw(self._line_shader)
+            
+        if self.point_coords:
+            self._point_shader.bind()
+            self._point_batch.draw(self._point_shader)
+            
         self._stop_drawing()
 
 
 if __name__ == "__main__":
-    # Simple example, run it on blender's text editor.
+    DrawCallback.remove_all_handlers()
 
-    # create a new instance of the class
     draw = DrawCallback()
-    # add lines to ir
     draw.add_line((10, 0, 0), (-10, 0, 0), color1=(1, 0, 0, 1), color2=(0, 0, 1, 1))
     draw.add_line((0, 0, 0), (0, 0, 5), color1=(0, 1, 0, 1), color2=(0, 1, 1, 1))
-    # enable X ray mode/see through objects and set Blend mode to Additive
+    draw.add_point((0, 0, 5), color=(1, 1, 0, 1))
+
     draw.draw_on_top = True
-    draw.blend_mode = ADDITIVE_BLEND
-    # set line width to 5
-    draw.line_width = 5
-    # Important, update batch always when adding
-    # new lines, otherwize they wont render.
+    draw.blend_mode = 'ADDITIVE'
+    draw.line_width = 5.0
+    draw.point_size = 10.0
+
     draw.update_batch()
-    # setup draw handler, optionally, you can call bpy.SpaceView3D.draw_handler_add()
     draw.setup_handler()
