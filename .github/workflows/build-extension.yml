@@ -155,11 +155,12 @@ jobs:
           LINUX_STATUS: ${{ needs.build-linux.result }}
           WINDOWS_STATUS: ${{ needs.build-windows.result }}
           MACOS_STATUS: ${{ needs.build-macos.result }}
+          COMMIT_MSG: ${{ github.event.workflow_run.head_commit.message }}
         run: |
           cat << 'EOF' > body.md
           ## Softwrap Release (${{ github.ref_name }})
 
-          Built and packaged with **Blender ${{ env.BLENDER_VERSION }}** (Python ${{ env.PYTHON_VERSION }}).
+          ${COMMIT_MSG}
 
           ### Included Platform Builds
           * **Linux (`linux-x64`):** `${LINUX_STATUS}` (manylinux_2_28)
