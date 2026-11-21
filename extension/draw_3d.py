@@ -11,9 +11,9 @@
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # Modified 2026-11-20 by bobajeff: Updated draw code to work with Blender 5.1.2
+# Modified 2026-11-21: Fixed circular point rendering for Blender 5.3 (Vulkan/Metal/OpenGL)
 '''
-This is a utility module for drawing lines in the 3D viewport on Blender 5.1.2
-using the GPU Api
+This is a utility module for drawing lines and circular points in the 3D viewport on Blender 5.3 using the GPU API.
 
 
 The idea is to get rid of messy draw functions and data that is hard to keep track.
@@ -27,34 +27,46 @@ import gpu
 from gpu_extras.batch import batch_for_shader
 from mathutils import Matrix, Vector
 
-vertex_shader = '''
+line_vertex_shader = '''
 void main() {
     gl_Position = ModelViewProjectionMatrix * vec4(pos, 1.0);
-    gl_Position.z -= 0.002;
+    gl_Position.z -= 0.0005 * gl_Position.w;
     finalColor = color;
 }
 '''
 
-fragment_shader = '''
+line_fragment_shader = '''
 void main() {
     fragColor = finalColor;
+}
+'''
+
+point_vertex_shader = '''
+void main() {
+    gl_Position = ModelViewProjectionMatrix * vec4(pos, 1.0);
+    gl_Position.z -= 0.0005 * gl_Position.w;
+    gl_PointSize = pointSize;
+    finalColor = color;
 }
 '''
 
 point_fragment_shader = '''
 void main() {
     vec2 coord = (gl_PointCoord - vec2(0.5, 0.5)) * 2.0;
-    float fac = dot(coord, coord);
-    if (fac > 0.5) {
+    float dist = length(coord);
+    if (dist > 1.0) {
         discard;
     }
-    fragColor = finalColor;
+    // Smooth 1px anti-aliased edge
+    float aa = fwidth(dist);
+    float alpha = 1.0 - smoothstep(1.0 - aa, 1.0, dist);
+    fragColor = vec4(finalColor.rgb, finalColor.a * alpha);
 }
 '''
 
 
-def _create_shader(frag_source):
-    vert_out = gpu.types.GPUStageInterfaceInfo("my_interface")
+def _create_line_shader():
+    vert_out = gpu.types.GPUStageInterfaceInfo("line_interface")
     vert_out.smooth('VEC4', "finalColor")
 
     shader_info = gpu.types.GPUShaderCreateInfo()
@@ -64,8 +76,26 @@ def _create_shader(frag_source):
     shader_info.vertex_out(vert_out)
     shader_info.fragment_out(0, 'VEC4', "fragColor")
 
-    shader_info.vertex_source(vertex_shader)
-    shader_info.fragment_source(frag_source)
+    shader_info.vertex_source(line_vertex_shader)
+    shader_info.fragment_source(line_fragment_shader)
+
+    return gpu.shader.create_from_info(shader_info)
+
+
+def _create_point_shader():
+    vert_out = gpu.types.GPUStageInterfaceInfo("point_interface")
+    vert_out.smooth('VEC4', "finalColor")
+
+    shader_info = gpu.types.GPUShaderCreateInfo()
+    shader_info.push_constant('MAT4', "ModelViewProjectionMatrix")
+    shader_info.push_constant('FLOAT', "pointSize")
+    shader_info.vertex_in(0, 'VEC3', "pos")
+    shader_info.vertex_in(1, 'VEC4', "color")
+    shader_info.vertex_out(vert_out)
+    shader_info.fragment_out(0, 'VEC4', "fragColor")
+
+    shader_info.vertex_source(point_vertex_shader)
+    shader_info.fragment_source(point_fragment_shader)
 
     return gpu.shader.create_from_info(shader_info)
 
@@ -89,8 +119,8 @@ class DrawCallback:
         self.point_coords = []
         self.point_colors = []
 
-        self._line_shader = _create_shader(fragment_shader)
-        self._point_shader = _create_shader(point_fragment_shader)
+        self._line_shader = _create_line_shader()
+        self._point_shader = _create_point_shader()
 
         self._line_batch = batch_for_shader(
             self._line_shader, 'LINES', {"pos": self.line_coords, "color": self.line_colors}
@@ -104,6 +134,8 @@ class DrawCallback:
 
     def setup_handler(self):
         # Utility function to easily add it as a draw handler
+        if self.draw_handler is not None:
+            return
         self.draw_handler = bpy.types.SpaceView3D.draw_handler_add(self, (), "WINDOW", "POST_VIEW")
         self.__class__.running_draws.add(self)
 
@@ -113,7 +145,7 @@ class DrawCallback:
             return
         bpy.types.SpaceView3D.draw_handler_remove(self.draw_handler, "WINDOW")
         self.draw_handler = None
-        self.__class__.running_draws.remove(self)
+        self.__class__.running_draws.discard(self)
 
     @classmethod
     def remove_all_handlers(cls):
@@ -168,16 +200,20 @@ class DrawCallback:
         gpu.state.point_size_set(1.0)
 
     def _draw(self):
+        if not self.line_coords and not self.point_coords:
+            return
+
         self._start_drawing()
-        
+
         if self.line_coords:
             self._line_shader.bind()
             self._line_batch.draw(self._line_shader)
-            
+
         if self.point_coords:
             self._point_shader.bind()
+            self._point_shader.uniform_float("pointSize", self.point_size)
             self._point_batch.draw(self._point_shader)
-            
+
         self._stop_drawing()
 
 

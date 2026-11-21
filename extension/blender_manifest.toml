@@ -1,6 +1,6 @@
-schema_version = "2.1.3"
+schema_version = "2.1.4"
 id = "softwrap_updated"
-version = "2.1.3"
+version = "2.1.4"
 name = "Softwrap"
 tagline = "Transfer topology to another model using softbody simulation"
 maintainer = "Jeffrey"
@@ -17,7 +17,7 @@ platforms = [
 ]
 
 wheels = [
-  "./wheels/softwrap_core-2.1.3-cp313-cp313-win_amd64.whl",
-  "./wheels/softwrap_core-2.1.3-cp313-cp313-macosx_11_0_universal2.whl",
-  "./wheels/softwrap_core-2.1.3-cp313-cp313-manylinux_2_28_x86_64.whl",
+  "./wheels/softwrap_core-2.1.4-cp313-cp313-win_amd64.whl",
+  "./wheels/softwrap_core-2.1.4-cp313-cp313-macosx_11_0_universal2.whl",
+  "./wheels/softwrap_core-2.1.4-cp313-cp313-manylinux_2_28_x86_64.whl",
 ]

@@ -12,7 +12,7 @@ permissions:
 env:
   # Blender 5.1.2 uses Python 3.13
   PYTHON_VERSION: "3.13"
-  BLENDER_VERSION: "5.1.2"
+  BLENDER_VERSION: "5.3.0"
 
 jobs:
   build-linux:
